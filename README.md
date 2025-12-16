@@ -1,0 +1,1 @@
+This is a simple Python + SQLite project to track personal expenses and work hours. Built end-to-end without frameworks
