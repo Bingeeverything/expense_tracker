@@ -19,6 +19,9 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--category", required=True, help="Category like food, transport or Rent")
     add.add_argument("--date", required=True, help="Date YYYY-MM-DD")
     add.add_argument("--note", default="", help="Optional note")
+
+    lst = sub.add_parser("list", help="List Recent Expenses.")
+    lst.add_argument("--limit",type=int,default=20)
     return parser
 
 def main() -> int:
@@ -49,7 +52,13 @@ def main() -> int:
         return 0
 
     elif args.cmd == "add":
+
         db_path = Path.cwd() / "expenses.db"
+        if not db_path.exists():
+            print("Error: database not found. Run: python -m expense_tracker init")
+            return 2
+        conn = sqlite3.connect(db_path)
+        
         try:
             amount = Decimal(args.amount)
         except InvalidOperation:
@@ -70,11 +79,6 @@ def main() -> int:
 
         created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-        conn = sqlite3.connect(db_path)
-        if not db_path.exists():
-            print("Error: database not found. Run: python -m expense_tracker init")
-            return 2
-
         try:
             conn.execute(
                 """
@@ -90,5 +94,36 @@ def main() -> int:
         print(f"Added: {args.amount} AUD {args.category} {args.date}")
         return 0      
 
+    elif args.cmd == 'list':
+        db_path = Path.cwd() / "expenses.db"
+        if not db_path.exists():
+            print("Error: database not found. Run: python -m expense_tracker init")
+            return 2
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute(
+                """
+                SELECT id, amount_cents, currency, category, date, note, created_at
+                FROM expenses
+                ORDER BY id DESC
+                LIMIT ?;
+                """,
+                (args.limit,)
+            )
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            print(f"There are no expenses yet")
+            return 0
+        
+        print("ID   Date     Category    Amount  Note")
+        for row in rows:
+            id_, amount_cents, currency, category, date, note, created_at = row
+            amount_str = f"{amount_cents / 100:.2f}"
+            print(f"{id_:<3} {date:<10} {category:<10} {amount_str:<7} {note}")
+        return 0
+    
 if __name__ == "__main__":
     raise SystemExit(main())
