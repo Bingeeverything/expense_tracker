@@ -11,7 +11,6 @@ def build_parser() -> argparse.ArgumentParser:
         description="Personal expense tracker (CLI + SQL Lite)"
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
-
     sub.add_parser("init", help="Initialize the database.")
 
     add = sub.add_parser("add", help="Add a new expense.")
@@ -22,6 +21,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     lst = sub.add_parser("list", help="List Recent Expenses.")
     lst.add_argument("--limit",type=int,default=20)
+
+    summ = sub.add_parser("summary", help="Monthly Summary by Category")
+    summ.add_argument("--month", required=True, help="Month YYYY-MM")
     return parser
 
 def main() -> int:
@@ -125,5 +127,49 @@ def main() -> int:
             print(f"{id_:<3} {date:<10} {category:<10} {amount_str:<7} {note}")
         return 0
     
+    elif args.cmd == "summary":
+        db_path = Path.cwd() / "expenses.db"
+        if not db_path.exists():
+            print("Error: database not found. Run: python -m expense_tracker init")
+            return 2
+        try:
+            datetime.strptime(args.month, "%Y-%m")
+        except ValueError:
+            print("Error: --month must be in YYYY-MM format")
+            return 2
+        
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor =  conn.execute(
+                """
+                SELECT category, SUM(amount_cents)
+                FROM expenses
+                WHERE date LIKE ?
+                GROUP BY category
+                ORDER BY category;
+                """,
+                (args.month + "%",)
+            )
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
+        
+        if not rows:
+            print(f"No expenses for {args.month}")
+            return 0
+        
+        print(f"Summary for {args.month}:")
+        total_cents = 0
+        for category, sum_cents in rows:
+            amount = sum_cents/100
+            total_cents += sum_cents
+            print(f"{category:<12}{amount:.2f}")
+
+        print("-" * 17)
+        print(f"{'Total':<12}{total_cents / 100:.2f}")
+        return 0
+
+    else:
+        print("not found try again")
 if __name__ == "__main__":
     raise SystemExit(main())
